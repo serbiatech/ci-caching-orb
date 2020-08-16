@@ -1,0 +1,315 @@
+version: 2.1
+
+jobs:
+
+  # Build docker images and store it in cache
+
+  build-docker-images:
+    parameters:
+      dockerComposeFile:
+        type: string
+        default: "./docker/docker-compose.ci.yml"
+      dockerCheckSumDir:
+        type: string
+        default: "./docker"
+      additionalCacheKey:
+        type: string
+        default: "v1"
+    machine: true
+    steps:
+      - checkout
+      - docker-images-cache-load:
+          dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+          additionalCacheKey: << parameters.additionalCacheKey >>
+      - docker-layers-load
+      - docker-layers-check
+      - docker-images-build:
+          dockerComposeFile: << parameters.dockerComposeFile >>
+      - docker-layers-save
+      - docker-images-cache-save:
+          dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+          additionalCacheKey: << parameters.additionalCacheKey >>
+
+  # Build docker images and store it in cache
+
+  build-docker-image:
+    parameters:
+      dockerFolder:
+        type: string
+        default: "./docker/composer"
+      imageTag:
+        type: string
+        default: "ci-composer"
+      additionalCacheKey:
+        type: string
+        default: "v1"
+      dockerBuildArgs:
+        type: string
+        default: ""
+    machine: true
+    steps:
+      - checkout
+      - docker-images-cache-load:
+          dockerCheckSumDir: << parameters.dockerFolder >>
+          additionalCacheKey: << parameters.additionalCacheKey >>
+          baseCacheName: << parameters.imageTag >>
+      - docker-layers-load:
+          cacheFile: ~/<< parameters.imageTag >>.tar
+      - docker-layers-check:
+          cacheFile: ~/<< parameters.imageTag >>.tar
+      - docker-image-build:
+          dockerFolder: << parameters.dockerFolder >>
+          dockerBuildArgs: << parameters.dockerBuildArgs >>
+          imageTag: << parameters.imageTag >>
+      - docker-layers-save:
+          cacheFile: ~/<< parameters.imageTag >>.tar
+          nameFilter: << parameters.imageTag >>
+      - docker-images-cache-save:
+          cacheFile: ~/<< parameters.imageTag >>.tar
+          dockerCheckSumDir: << parameters.dockerFolder >>
+          additionalCacheKey: << parameters.additionalCacheKey >>
+          baseCacheName: << parameters.imageTag >>
+
+commands:
+
+  # Load cached docker images command
+
+  docker-images-cache-load:
+    parameters:
+      baseCacheName:
+        type: string
+        default: "images"
+      dockerCheckSumDir:
+        type: string
+        default: "./docker"
+      additionalCacheKey:
+        type: string
+        default: "v1"
+    steps:
+      - run:
+          name: Create directory cache key
+          command: |
+            echo $(find << parameters.dockerCheckSumDir >> -type f -exec md5sum {} \; | md5sum | cut -d' ' -f1)  > CACHE_KEY
+      - restore_cache:
+          name: Load docker images from cache
+          keys:
+            - docker-<< parameters.baseCacheName >>-{{ checksum "./CACHE_KEY" }}-<< parameters.additionalCacheKey >>
+
+  # Save docker images to cache command
+
+  docker-images-cache-save:
+    parameters:
+      baseCacheName:
+        type: string
+        default: "images"
+      dockerCheckSumDir:
+        type: string
+        default: "./docker"
+      additionalCacheKey:
+        type: string
+        default: "v1"
+      cacheFile:
+        type: string
+        default: "~/st-cached-docker-layers.tar"
+    steps:
+      - run:
+          name: Create directory cache key
+          command: |
+            echo $(find << parameters.dockerCheckSumDir >> -type f -exec md5sum {} \; | md5sum | cut -d' ' -f1)  > CACHE_KEY
+      - save_cache:
+          name: Cache docker images
+          key: docker-<< parameters.baseCacheName >>-{{ checksum "./CACHE_KEY" }}-<< parameters.additionalCacheKey >>
+          paths:
+            - << parameters.cacheFile >>
+
+  # Run docker containers command
+
+  docker-run:
+    parameters:
+      dockerComposeFile:
+        type: string
+        default: "./docker/docker-compose.ci.yml"
+    steps:
+      - run:
+          name: Run docker
+          command: docker-compose -f << parameters.dockerComposeFile >> up -d
+
+  # Check cached docker layers command
+
+  docker-layers-check:
+    parameters:
+      cacheFile:
+        type: string
+        default: "~/st-cached-docker-layers.tar"
+    steps:
+      - run:
+          name: Check docker layers, and halt job if they exist
+          command: |
+            if [[ -f << parameters.cacheFile >> ]]; then
+                circleci step halt
+            fi
+
+  # Load cached docker layers command
+
+  docker-layers-load:
+    parameters:
+      cacheFile:
+        type: string
+        default: "~/st-cached-docker-layers.tar"
+    steps:
+      - run:
+          name: Load docker layers
+          command: |
+            if [[ -f << parameters.cacheFile >> ]]; then
+              docker load -i << parameters.cacheFile >>
+            fi
+
+  # Build docker images command
+
+  docker-images-build:
+    parameters:
+      dockerComposeFile:
+        type: string
+        default: "./docker/docker-compose.ci.yml"
+    steps:
+      - run:
+          name: Build docker
+          command: docker-compose -f << parameters.dockerComposeFile >> build
+
+  # Build single docker image command
+
+  docker-image-build:
+    parameters:
+      imageTag:
+        type: string
+        default: "ci-composer"
+      dockerFolder:
+        type: string
+        default: "./docker/composer"
+      dockerBuildArgs:
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: Build docker
+          command: docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>
+
+  # Cache docker layers command
+
+  docker-layers-save:
+    parameters:
+      cacheFile:
+        type: string
+        default: "~/st-cached-docker-layers.tar"
+      nameFilter:
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: save docker layers
+          command: |
+            DOCKER_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}"  --filter "dangling=false" << parameters.nameFilter >>)
+            docker save -o << parameters.cacheFile >> $DOCKER_IMAGES
+
+  # Check for install dependencies command
+
+  dependency-check:
+    parameters:
+      cacheDataPath:
+        type: string
+        default: ./vendor/
+    steps:
+      - run:
+          name: Check if dependencies are in provided directory, and halt if they are
+          command: |
+            if [[ -d << parameters.cacheDataPath >> ]]; then
+              circleci step halt
+            fi
+
+  # Save dependencies to cache command
+
+  dependency-cache-save:
+    parameters:
+      checkSumFile:
+        type: string
+      cacheDataPath:
+        type: string
+        default: ./vendor/
+      additionalCacheKey:
+        type: string
+        default: "v1"
+    steps:
+      - save_cache:
+          name: Cache vendor
+          key: vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>
+          paths:
+            - << parameters.cacheDataPath >>
+
+  # Load dependencies from cache command
+
+  dependency-cache-load:
+    parameters:
+      checkSumFile:
+        type: string
+      additionalCacheKey:
+        type: string
+        default: "v1"
+    steps:
+      - restore_cache:
+          name: Load vendor from cache
+          keys:
+            - vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>
+
+  # Execute command in container command
+
+  execute-in-container:
+    parameters:
+      dockerComposeFile:
+        type: string
+        default: "./docker/docker-compose.ci.yml"
+      info:
+        type: string
+      container:
+        type: string
+      command:
+        type: string
+    steps:
+      - run:
+          name: << parameters.info >>
+          command: docker-compose -f << parameters.dockerComposeFile >> exec << parameters.container >> /bin/bash -c '<< parameters.command >>'
+
+  # Restores cache and code command
+
+  restore-caches-and-code:
+    parameters:
+      dockerCheckSumDir:
+        type: string
+        default: "./docker"
+      dependencyCheckSumFile:
+        type: string
+    steps:
+      - checkout
+      - docker-images-cache-load:
+          dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+      - docker-layers-load
+      - dependency-cache-load:
+          checkSumFile: << parameters.dependencyCheckSumFile >>
+
+  # Run docker from restored caches command
+
+  run-docker-from-restored-caches:
+    parameters:
+      dockerCheckSumDir:
+        type: string
+        default: "./docker"
+      dependencyCheckSumFile:
+        type: string
+      dockerComposeFile:
+        type: string
+        default: "./docker/docker-compose.ci.yml"
+    steps:
+      - restore-caches-and-code:
+          dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+          dependencyCheckSumFile: << parameters.dependencyCheckSumFile >>
+      - docker-run:
+          dockerComposeFile: << parameters.dockerComposeFile >>
