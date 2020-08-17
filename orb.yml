@@ -169,6 +169,7 @@ commands:
           command: |
             if [[ -f << parameters.cacheFile >> ]]; then
               docker load -i << parameters.cacheFile >>
+            fi
 
   # Cache docker layers command
 
