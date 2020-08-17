@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  ci-building: serbiatech/ci-building@0.0.1
+
 jobs:
 
   # Build docker images and store it in cache
@@ -29,7 +32,7 @@ jobs:
           additionalCacheKey: << parameters.additionalCacheKey >>
       - docker-layers-load
       - docker-layers-check
-      - docker-images-build:
+      - ci-building/docker-images-build:
           dockerComposeFile: << parameters.dockerComposeFile >>
           dockerTimezone: << parameters.dockerTimezone >>
           dockerLanguage: << parameters.dockerLanguage >>
@@ -71,7 +74,7 @@ jobs:
           cacheFile: ~/<< parameters.imageTag >>.tar
       - docker-layers-check:
           cacheFile: ~/<< parameters.imageTag >>.tar
-      - docker-image-build:
+      - ci-building/docker-image-build:
           dockerFolder: << parameters.dockerFolder >>
           dockerBuildArgs: << parameters.dockerBuildArgs >>
           imageTag: << parameters.imageTag >>
@@ -138,29 +141,6 @@ commands:
           paths:
             - << parameters.cacheFile >>
 
-  # Run docker containers command
-
-  docker-run:
-    parameters:
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-    steps:
-      - run:
-          name: Run docker
-          command: |
-            export ENV_USER_ID=$(id -u)
-            export ENV_GROUP_ID=$(id -g)
-            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
-            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
-            docker-compose -f << parameters.dockerComposeFile >> up -d
-
   # Check cached docker layers command
 
   docker-layers-check:
@@ -189,59 +169,6 @@ commands:
           command: |
             if [[ -f << parameters.cacheFile >> ]]; then
               docker load -i << parameters.cacheFile >>
-            fi
-
-  # Build docker images command
-
-  docker-images-build:
-    parameters:
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-    steps:
-      - run:
-          name: Build docker
-          command: |
-            export ENV_USER_ID=$(id -u)
-            export ENV_GROUP_ID=$(id -g)
-            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
-            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
-            docker-compose -f << parameters.dockerComposeFile >> build
-
-  # Build single docker image command
-
-  docker-image-build:
-    parameters:
-      imageTag:
-        type: string
-        default: "ci-composer"
-      dockerFolder:
-        type: string
-        default: "./docker/composer"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-      dockerBuildArgs:
-        type: string
-        default: ""
-    steps:
-      - run:
-          name: Build docker
-          command: |
-            export ENV_USER_ID=$(id -u)
-            export ENV_GROUP_ID=$(id -g)
-            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
-            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
-            docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>
 
   # Cache docker layers command
 
@@ -309,24 +236,6 @@ commands:
           keys:
             - vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>
 
-  # Execute command in container command
-
-  execute-in-container:
-    parameters:
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      info:
-        type: string
-      container:
-        type: string
-      command:
-        type: string
-    steps:
-      - run:
-          name: << parameters.info >>
-          command: docker-compose -f << parameters.dockerComposeFile >> exec << parameters.container >> /bin/bash -c '<< parameters.command >>'
-
   # Restores cache and code command
 
   restore-caches-and-code:
@@ -366,7 +275,7 @@ commands:
       - restore-caches-and-code:
           dockerCheckSumDir: << parameters.dockerCheckSumDir >>
           dependencyCheckSumFile: << parameters.dependencyCheckSumFile >>
-      - docker-run:
+      - ci-building/docker-run:
           dockerComposeFile: << parameters.dockerComposeFile >>
           dockerTimezone: << parameters.dockerTimezone >>
           dockerLanguage: << parameters.dockerLanguage >>
