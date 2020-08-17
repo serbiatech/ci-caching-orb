@@ -155,10 +155,10 @@ commands:
       - run:
           name: Run docker
           command: |
-            export HOST_USER_ID=$(id -u)
-            export HOST_GROUP_ID=$(id -g)
-            export CONTAINER_LANGUAGE=<< parameters.dockerLanguage >>
-            export CONTAINER_TIMEZONE=<< parameters.dockerTimezone >>
+            export ENV_USER_ID=$(id -u)
+            export ENV_GROUP_ID=$(id -g)
+            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
             docker-compose -f << parameters.dockerComposeFile >> up -d
 
   # Check cached docker layers command
@@ -208,10 +208,10 @@ commands:
       - run:
           name: Build docker
           command: |
-            export HOST_USER_ID=$(id -u)
-            export HOST_GROUP_ID=$(id -g)
-            export CONTAINER_LANGUAGE=<< parameters.dockerLanguage >>
-            export CONTAINER_TIMEZONE=<< parameters.dockerTimezone >>
+            export ENV_USER_ID=$(id -u)
+            export ENV_GROUP_ID=$(id -g)
+            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
             docker-compose -f << parameters.dockerComposeFile >> build
 
   # Build single docker image command
@@ -237,10 +237,10 @@ commands:
       - run:
           name: Build docker
           command: |
-            export HOST_USER_ID=$(id -u)
-            export HOST_GROUP_ID=$(id -g)
-            export CONTAINER_LANGUAGE=<< parameters.dockerLanguage >>
-            export CONTAINER_TIMEZONE=<< parameters.dockerTimezone >>
+            export ENV_USER_ID=$(id -u)
+            export ENV_GROUP_ID=$(id -g)
+            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
             docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>
 
   # Cache docker layers command
@@ -255,7 +255,7 @@ commands:
         default: ""
     steps:
       - run:
-          name: save docker layers
+          name: Save docker layers
           command: |
             DOCKER_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}"  --filter "dangling=false" << parameters.nameFilter >>)
             docker save -o << parameters.cacheFile >> $DOCKER_IMAGES
