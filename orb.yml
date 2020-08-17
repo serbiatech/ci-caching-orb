@@ -15,6 +15,12 @@ jobs:
       additionalCacheKey:
         type: string
         default: "v1"
+      dockerTimezone:
+        type: string
+        default: "UTC"
+      dockerLanguage:
+        type: string
+        default: "en_US.UTF-8"
     machine: true
     steps:
       - checkout
@@ -25,6 +31,8 @@ jobs:
       - docker-layers-check
       - docker-images-build:
           dockerComposeFile: << parameters.dockerComposeFile >>
+          dockerTimezone: << parameters.dockerTimezone >>
+          dockerLanguage: << parameters.dockerLanguage >>
       - docker-layers-save
       - docker-images-cache-save:
           dockerCheckSumDir: << parameters.dockerCheckSumDir >>
@@ -43,6 +51,12 @@ jobs:
       additionalCacheKey:
         type: string
         default: "v1"
+      dockerTimezone:
+        type: string
+        default: "UTC"
+      dockerLanguage:
+        type: string
+        default: "en_US.UTF-8"
       dockerBuildArgs:
         type: string
         default: ""
@@ -61,6 +75,8 @@ jobs:
           dockerFolder: << parameters.dockerFolder >>
           dockerBuildArgs: << parameters.dockerBuildArgs >>
           imageTag: << parameters.imageTag >>
+          dockerTimezone: << parameters.dockerTimezone >>
+          dockerLanguage: << parameters.dockerLanguage >>
       - docker-layers-save:
           cacheFile: ~/<< parameters.imageTag >>.tar
           nameFilter: << parameters.imageTag >>
@@ -129,10 +145,21 @@ commands:
       dockerComposeFile:
         type: string
         default: "./docker/docker-compose.ci.yml"
+      dockerTimezone:
+        type: string
+        default: "UTC"
+      dockerLanguage:
+        type: string
+        default: "en_US.UTF-8"
     steps:
       - run:
           name: Run docker
-          command: docker-compose -f << parameters.dockerComposeFile >> up -d
+          command: |
+            export HOST_USER_ID=$(id -u)
+            export HOST_GROUP_ID=$(id -g)
+            export CONTAINER_LANGUAGE=<< parameters.dockerLanguage >>
+            export CONTAINER_TIMEZONE=<< parameters.dockerTimezone >>
+            docker-compose -f << parameters.dockerComposeFile >> up -d
 
   # Check cached docker layers command
 
@@ -171,10 +198,21 @@ commands:
       dockerComposeFile:
         type: string
         default: "./docker/docker-compose.ci.yml"
+      dockerTimezone:
+        type: string
+        default: "UTC"
+      dockerLanguage:
+        type: string
+        default: "en_US.UTF-8"
     steps:
       - run:
           name: Build docker
-          command: docker-compose -f << parameters.dockerComposeFile >> build
+          command: |
+            export HOST_USER_ID=$(id -u)
+            export HOST_GROUP_ID=$(id -g)
+            export CONTAINER_LANGUAGE=<< parameters.dockerLanguage >>
+            export CONTAINER_TIMEZONE=<< parameters.dockerTimezone >>
+            docker-compose -f << parameters.dockerComposeFile >> build
 
   # Build single docker image command
 
@@ -186,13 +224,24 @@ commands:
       dockerFolder:
         type: string
         default: "./docker/composer"
+      dockerTimezone:
+        type: string
+        default: "UTC"
+      dockerLanguage:
+        type: string
+        default: "en_US.UTF-8"
       dockerBuildArgs:
         type: string
         default: ""
     steps:
       - run:
           name: Build docker
-          command: docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>
+          command: |
+            export HOST_USER_ID=$(id -u)
+            export HOST_GROUP_ID=$(id -g)
+            export CONTAINER_LANGUAGE=<< parameters.dockerLanguage >>
+            export CONTAINER_TIMEZONE=<< parameters.dockerTimezone >>
+            docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>
 
   # Cache docker layers command
 
@@ -307,9 +356,17 @@ commands:
       dockerComposeFile:
         type: string
         default: "./docker/docker-compose.ci.yml"
+      dockerTimezone:
+        type: string
+        default: "UTC"
+      dockerLanguage:
+        type: string
+        default: "en_US.UTF-8"
     steps:
       - restore-caches-and-code:
           dockerCheckSumDir: << parameters.dockerCheckSumDir >>
           dependencyCheckSumFile: << parameters.dependencyCheckSumFile >>
       - docker-run:
           dockerComposeFile: << parameters.dockerComposeFile >>
+          dockerTimezone: << parameters.dockerTimezone >>
+          dockerLanguage: << parameters.dockerLanguage >>
