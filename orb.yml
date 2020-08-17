@@ -106,6 +106,24 @@ commands:
           name: << parameters.info >>
           command: docker-compose -f << parameters.dockerComposeFile >> exec << parameters.container >> /bin/bash -c '<< parameters.command >>'
 
+  # Execute command with external docker container
+
+  execute-with-external-container:
+    parameters:
+      dockerComposeFile:
+        type: string
+        default: "./docker/docker-compose.ci.yml"
+      info:
+        type: string
+      container:
+        type: string
+      command:
+        type: string
+      steps:
+        - run:
+            name: << parameters.info >>
+            command: docker-compose -f << parameters.dockerComposeFile >> run --rm << parameters.container >> << parameters.command >>
+
   # Run docker containers command
 
   docker-run:
