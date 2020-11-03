@@ -160,6 +160,7 @@ commands:
         type: string
         default: "en_US.UTF-8"
     steps:
+      - docker-hub-login-check-env-vars
       - run:
           name: Run docker
           command: |
@@ -167,6 +168,7 @@ commands:
             export ENV_GROUP_ID=$(id -g)
             export ENV_LANGUAGE=<< parameters.dockerLanguage >>
             export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
             docker-compose -f << parameters.dockerComposeFile >> up -d
 
   # Build docker images command
@@ -183,6 +185,7 @@ commands:
         type: string
         default: "en_US.UTF-8"
     steps:
+      - docker-hub-login-check-env-vars
       - run:
           name: Build docker
           command: |
@@ -190,6 +193,7 @@ commands:
             export ENV_GROUP_ID=$(id -g)
             export ENV_LANGUAGE=<< parameters.dockerLanguage >>
             export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
             docker-compose -f << parameters.dockerComposeFile >> build
 
   # Build single docker image command
@@ -212,6 +216,7 @@ commands:
         type: string
         default: ""
     steps:
+      - docker-hub-login-check-env-vars
       - run:
           name: Build docker
           command: |
@@ -219,6 +224,7 @@ commands:
             export ENV_GROUP_ID=$(id -g)
             export ENV_LANGUAGE=<< parameters.dockerLanguage >>
             export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
             docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>
 
   # Load cached docker images command
@@ -410,3 +416,19 @@ commands:
           dockerComposeFile: << parameters.dockerComposeFile >>
           dockerTimezone: << parameters.dockerTimezone >>
           dockerLanguage: << parameters.dockerLanguage >>
+
+  # Check docker hub env wars
+
+  docker-hub-login-check-env-vars:
+    steps:
+      - run:
+          name: Check environment variables required for Docker Hub login
+          command: |
+            set -e
+            if [[ -z "${DOCKERHUB_USERNAME}" ]]; then
+              echo "DOCKERHUB_USERNAME environment variable is not set"
+              exit 1
+            elif [[ -z "${DOCKERHUB_PASSWORD}" ]]; then
+              echo "DOCKERHUB_PASSWORD environment variable is not set"
+              exit 1
+            fi
