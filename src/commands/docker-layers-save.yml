@@ -1,0 +1,15 @@
+description: >
+  This command save docker layers.
+parameters:
+  cacheFile:
+    type: string
+    default: "~/st-cached-docker-layers.tar"
+  nameFilter:
+    type: string
+    default: ""
+steps:
+  - run:
+      name: Save docker layers
+      command: |
+        DOCKER_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}"  --filter "dangling=false" << parameters.nameFilter >>)
+        docker save -o << parameters.cacheFile >> $DOCKER_IMAGES

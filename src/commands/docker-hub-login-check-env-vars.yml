@@ -1,0 +1,14 @@
+description: >
+  This command check for DockerHub credentials.
+steps:
+  - run:
+      name: Check environment variables required for Docker Hub login
+      command: |
+        set -e
+        if [[ -z "${DOCKERHUB_USERNAME}" ]]; then
+          echo "DOCKERHUB_USERNAME environment variable is not set"
+          exit 1
+        elif [[ -z "${DOCKERHUB_PASSWORD}" ]]; then
+          echo "DOCKERHUB_PASSWORD environment variable is not set"
+          exit 1
+        fi

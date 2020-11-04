@@ -1,0 +1,35 @@
+description: >
+  This job is for building docker images
+
+parameters:
+  dockerComposeFile:
+    type: string
+    default: "./docker/docker-compose.ci.yml"
+  dockerCheckSumDir:
+    type: string
+    default: "./docker"
+  additionalCacheKey:
+    type: string
+    default: "v1"
+  dockerTimezone:
+    type: string
+    default: "UTC"
+  dockerLanguage:
+    type: string
+    default: "en_US.UTF-8"
+machine: true
+steps:
+  - checkout
+  - docker-images-cache-load:
+      dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+      additionalCacheKey: << parameters.additionalCacheKey >>
+  - docker-layers-load
+  - docker-layers-check
+  - docker-images-build:
+      dockerComposeFile: << parameters.dockerComposeFile >>
+      dockerTimezone: << parameters.dockerTimezone >>
+      dockerLanguage: << parameters.dockerLanguage >>
+  - docker-layers-save
+  - docker-images-cache-save:
+      dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+      additionalCacheKey: << parameters.additionalCacheKey >>

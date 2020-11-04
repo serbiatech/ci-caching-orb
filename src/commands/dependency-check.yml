@@ -1,0 +1,13 @@
+description: >
+  This command check for presence of dependencies.
+parameters:
+  cacheDataPath:
+    type: string
+    default: ./vendor/
+steps:
+  - run:
+      name: Check if dependencies are in provided directory, and halt if they are
+      command: |
+        if [[ -d << parameters.cacheDataPath >> ]]; then
+          circleci step halt
+        fi

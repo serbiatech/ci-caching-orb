@@ -1,0 +1,13 @@
+description: >
+  This command load dependencies from cache.
+parameters:
+  checkSumFile:
+    type: string
+  additionalCacheKey:
+    type: string
+    default: "v1"
+steps:
+  - restore_cache:
+      name: Load vendor from cache
+      keys:
+        - vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>

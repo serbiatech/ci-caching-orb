@@ -1,0 +1,25 @@
+description: >
+  This command save docker images to cache.
+parameters:
+  baseCacheName:
+    type: string
+    default: "images"
+  dockerCheckSumDir:
+    type: string
+    default: "./docker"
+  additionalCacheKey:
+    type: string
+    default: "v1"
+  cacheFile:
+    type: string
+    default: "~/st-cached-docker-layers.tar"
+steps:
+  - run:
+      name: Create directory cache key
+      command: |
+        echo $(find << parameters.dockerCheckSumDir >> -type f -exec md5sum {} \; | md5sum | cut -d' ' -f1)  > CACHE_KEY
+  - save_cache:
+      name: Cache docker images
+      key: docker-<< parameters.baseCacheName >>-{{ checksum "./CACHE_KEY" }}-<< parameters.additionalCacheKey >>
+      paths:
+        - << parameters.cacheFile >>

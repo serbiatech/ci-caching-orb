@@ -1,0 +1,21 @@
+description: >
+  This command load docker images from cache.
+parameters:
+  baseCacheName:
+    type: string
+    default: "images"
+  dockerCheckSumDir:
+    type: string
+    default: "./docker"
+  additionalCacheKey:
+    type: string
+    default: "v1"
+steps:
+  - run:
+      name: Create directory cache key
+      command: |
+        echo $(find << parameters.dockerCheckSumDir >> -type f -exec md5sum {} \; | md5sum | cut -d' ' -f1)  > CACHE_KEY
+  - restore_cache:
+      name: Load docker images from cache
+      keys:
+        - docker-<< parameters.baseCacheName >>-{{ checksum "./CACHE_KEY" }}-<< parameters.additionalCacheKey >>

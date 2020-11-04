@@ -1,0 +1,13 @@
+description: >
+  This command load docker layers.
+parameters:
+  cacheFile:
+    type: string
+    default: "~/st-cached-docker-layers.tar"
+steps:
+  - run:
+      name: Load docker layers
+      command: |
+        if [[ -f << parameters.cacheFile >> ]]; then
+          docker load -i << parameters.cacheFile >>
+        fi
