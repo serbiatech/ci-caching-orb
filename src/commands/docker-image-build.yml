@@ -1,0 +1,29 @@
+description: >
+  This command builds single docker image.
+parameters:
+  imageTag:
+    type: string
+    default: "ci-composer"
+  dockerFolder:
+    type: string
+    default: "./docker/composer"
+  dockerTimezone:
+    type: string
+    default: "UTC"
+  dockerLanguage:
+    type: string
+    default: "en_US.UTF-8"
+  dockerBuildArgs:
+    type: string
+    default: ""
+steps:
+  - docker-hub-login-check-env-vars
+  - run:
+      name: Build docker
+      command: |
+        export ENV_USER_ID=$(id -u)
+        export ENV_GROUP_ID=$(id -g)
+        export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+        export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+        docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+        docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>

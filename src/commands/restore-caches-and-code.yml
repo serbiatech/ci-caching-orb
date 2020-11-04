@@ -1,0 +1,15 @@
+description: >
+  This command restore caches and code.
+parameters:
+  dockerCheckSumDir:
+    type: string
+    default: "./docker"
+  dependencyCheckSumFile:
+    type: string
+steps:
+  - checkout
+  - docker-images-cache-load:
+      dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+  - docker-layers-load
+  - dependency-cache-load:
+      checkSumFile: << parameters.dependencyCheckSumFile >>

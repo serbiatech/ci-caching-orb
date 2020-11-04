@@ -1,434 +1,417 @@
 version: 2.1
-
-jobs:
-
-  # Build docker images and store it in cache
-
-  build-docker-images:
-    parameters:
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      dockerCheckSumDir:
-        type: string
-        default: "./docker"
-      additionalCacheKey:
-        type: string
-        default: "v1"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-    machine: true
-    steps:
-      - checkout
-      - docker-images-cache-load:
-          dockerCheckSumDir: << parameters.dockerCheckSumDir >>
-          additionalCacheKey: << parameters.additionalCacheKey >>
-      - docker-layers-load
-      - docker-layers-check
-      - docker-images-build:
-          dockerComposeFile: << parameters.dockerComposeFile >>
-          dockerTimezone: << parameters.dockerTimezone >>
-          dockerLanguage: << parameters.dockerLanguage >>
-      - docker-layers-save
-      - docker-images-cache-save:
-          dockerCheckSumDir: << parameters.dockerCheckSumDir >>
-          additionalCacheKey: << parameters.additionalCacheKey >>
-
-  # Build docker images and store it in cache
-
-  build-docker-image:
-    parameters:
-      dockerFolder:
-        type: string
-        default: "./docker/composer"
-      imageTag:
-        type: string
-        default: "ci-composer"
-      additionalCacheKey:
-        type: string
-        default: "v1"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-      dockerBuildArgs:
-        type: string
-        default: ""
-    machine: true
-    steps:
-      - checkout
-      - docker-images-cache-load:
-          dockerCheckSumDir: << parameters.dockerFolder >>
-          additionalCacheKey: << parameters.additionalCacheKey >>
-          baseCacheName: << parameters.imageTag >>
-      - docker-layers-load:
-          cacheFile: ~/<< parameters.imageTag >>.tar
-      - docker-layers-check:
-          cacheFile: ~/<< parameters.imageTag >>.tar
-      - docker-image-build:
-          dockerFolder: << parameters.dockerFolder >>
-          dockerBuildArgs: << parameters.dockerBuildArgs >>
-          imageTag: << parameters.imageTag >>
-          dockerTimezone: << parameters.dockerTimezone >>
-          dockerLanguage: << parameters.dockerLanguage >>
-      - docker-layers-save:
-          cacheFile: ~/<< parameters.imageTag >>.tar
-          nameFilter: << parameters.imageTag >>
-      - docker-images-cache-save:
-          cacheFile: ~/<< parameters.imageTag >>.tar
-          dockerCheckSumDir: << parameters.dockerFolder >>
-          additionalCacheKey: << parameters.additionalCacheKey >>
-          baseCacheName: << parameters.imageTag >>
-
+description: |
+    This Orb provides common CI jobs and commands for docker images, docker layers and dependencies.
 commands:
+    dependency-cache-load:
+        description: |
+            This command load dependencies from cache.
+        parameters:
+            additionalCacheKey:
+                default: v1
+                type: string
+            checkSumFile:
+                type: string
+        steps:
+            - restore_cache:
+                keys:
+                    - vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>
+                name: Load vendor from cache
+    dependency-cache-save:
+        description: |
+            This command save dependencies to cache.
+        parameters:
+            additionalCacheKey:
+                default: v1
+                type: string
+            cacheDataPath:
+                default: ./vendor/
+                type: string
+            checkSumFile:
+                type: string
+        steps:
+            - save_cache:
+                key: vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>
+                name: Cache vendor
+                paths:
+                    - << parameters.cacheDataPath >>
+    dependency-check:
+        description: |
+            This command check for presence of dependencies.
+        parameters:
+            cacheDataPath:
+                default: ./vendor/
+                type: string
+        steps:
+            - run:
+                command: |
+                    if [[ -d << parameters.cacheDataPath >> ]]; then
+                      circleci step halt
+                    fi
+                name: Check if dependencies are in provided directory, and halt if they are
+    docker-hub-login-check-env-vars:
+        description: |
+            This command check for DockerHub credentials.
+        steps:
+            - run:
+                command: |
+                    set -e
+                    if [[ -z "${DOCKERHUB_USERNAME}" ]]; then
+                      echo "DOCKERHUB_USERNAME environment variable is not set"
+                      exit 1
+                    elif [[ -z "${DOCKERHUB_PASSWORD}" ]]; then
+                      echo "DOCKERHUB_PASSWORD environment variable is not set"
+                      exit 1
+                    fi
+                name: Check environment variables required for Docker Hub login
+    docker-image-build:
+        description: |
+            This command builds single docker image.
+        parameters:
+            dockerBuildArgs:
+                default: ""
+                type: string
+            dockerFolder:
+                default: ./docker/composer
+                type: string
+            dockerLanguage:
+                default: en_US.UTF-8
+                type: string
+            dockerTimezone:
+                default: UTC
+                type: string
+            imageTag:
+                default: ci-composer
+                type: string
+        steps:
+            - docker-hub-login-check-env-vars
+            - run:
+                command: |
+                    export ENV_USER_ID=$(id -u)
+                    export ENV_GROUP_ID=$(id -g)
+                    export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+                    export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+                    docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+                    docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>
+                name: Build docker
+    docker-images-build:
+        description: |
+            This command builds docker images.
+        parameters:
+            dockerComposeFile:
+                default: ./docker/docker-compose.ci.yml
+                type: string
+            dockerLanguage:
+                default: en_US.UTF-8
+                type: string
+            dockerTimezone:
+                default: UTC
+                type: string
+        steps:
+            - docker-hub-login-check-env-vars
+            - run:
+                command: |
+                    export ENV_USER_ID=$(id -u)
+                    export ENV_GROUP_ID=$(id -g)
+                    export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+                    export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+                    docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+                    docker-compose -f << parameters.dockerComposeFile >> build
+                name: Build docker
+    docker-images-cache-load:
+        description: |
+            This command load docker images from cache.
+        parameters:
+            additionalCacheKey:
+                default: v1
+                type: string
+            baseCacheName:
+                default: images
+                type: string
+            dockerCheckSumDir:
+                default: ./docker
+                type: string
+        steps:
+            - run:
+                command: |
+                    echo $(find << parameters.dockerCheckSumDir >> -type f -exec md5sum {} \; | md5sum | cut -d' ' -f1)  > CACHE_KEY
+                name: Create directory cache key
+            - restore_cache:
+                keys:
+                    - docker-<< parameters.baseCacheName >>-{{ checksum "./CACHE_KEY" }}-<< parameters.additionalCacheKey >>
+                name: Load docker images from cache
+    docker-images-cache-save:
+        description: |
+            This command save docker images to cache.
+        parameters:
+            additionalCacheKey:
+                default: v1
+                type: string
+            baseCacheName:
+                default: images
+                type: string
+            cacheFile:
+                default: ~/st-cached-docker-layers.tar
+                type: string
+            dockerCheckSumDir:
+                default: ./docker
+                type: string
+        steps:
+            - run:
+                command: |
+                    echo $(find << parameters.dockerCheckSumDir >> -type f -exec md5sum {} \; | md5sum | cut -d' ' -f1)  > CACHE_KEY
+                name: Create directory cache key
+            - save_cache:
+                key: docker-<< parameters.baseCacheName >>-{{ checksum "./CACHE_KEY" }}-<< parameters.additionalCacheKey >>
+                name: Cache docker images
+                paths:
+                    - << parameters.cacheFile >>
+    docker-layers-check:
+        description: |
+            This command check for presence of docker layers.
+        parameters:
+            cacheFile:
+                default: ~/st-cached-docker-layers.tar
+                type: string
+        steps:
+            - run:
+                command: |
+                    if [[ -f << parameters.cacheFile >> ]]; then
+                        circleci step halt
+                    fi
+                name: Check docker layers, and halt job if they exist
+    docker-layers-load:
+        description: |
+            This command load docker layers.
+        parameters:
+            cacheFile:
+                default: ~/st-cached-docker-layers.tar
+                type: string
+        steps:
+            - run:
+                command: |
+                    if [[ -f << parameters.cacheFile >> ]]; then
+                      docker load -i << parameters.cacheFile >>
+                    fi
+                name: Load docker layers
+    docker-layers-save:
+        description: |
+            This command save docker layers.
+        parameters:
+            cacheFile:
+                default: ~/st-cached-docker-layers.tar
+                type: string
+            nameFilter:
+                default: ""
+                type: string
+        steps:
+            - run:
+                command: |
+                    DOCKER_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}"  --filter "dangling=false" << parameters.nameFilter >>)
+                    docker save -o << parameters.cacheFile >> $DOCKER_IMAGES
+                name: Save docker layers
+    docker-run:
+        description: |
+            This command start docker containers.
+        parameters:
+            dockerComposeFile:
+                default: ./docker/docker-compose.ci.yml
+                type: string
+            dockerLanguage:
+                default: en_US.UTF-8
+                type: string
+            dockerTimezone:
+                default: UTC
+                type: string
+        steps:
+            - docker-hub-login-check-env-vars
+            - run:
+                command: |
+                    export ENV_USER_ID=$(id -u)
+                    export ENV_GROUP_ID=$(id -g)
+                    export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+                    export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+                    docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+                    docker-compose -f << parameters.dockerComposeFile >> up -d
+                name: Run docker
+    execute-and-remove-container:
+        description: |
+            This command executes command and remove docker container.
+        parameters:
+            command:
+                type: string
+            container:
+                type: string
+            dockerComposeFile:
+                default: ./docker/docker-compose.ci.yml
+                type: string
+            dockerLanguage:
+                default: en_US.UTF-8
+                type: string
+            dockerTimezone:
+                default: UTC
+                type: string
+            info:
+                type: string
+        steps:
+            - run:
+                command: |
+                    export ENV_USER_ID=$(id -u)
+                    export ENV_GROUP_ID=$(id -g)
+                    export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+                    export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+                    docker-compose -f << parameters.dockerComposeFile >> run --rm << parameters.container >> << parameters.command >>
+                name: << parameters.info >>
+    execute-in-container:
+        description: |
+            This command executes command in docker container.
+        parameters:
+            command:
+                type: string
+            container:
+                type: string
+            dockerComposeFile:
+                default: ./docker/docker-compose.ci.yml
+                type: string
+            dockerLanguage:
+                default: en_US.UTF-8
+                type: string
+            dockerTimezone:
+                default: UTC
+                type: string
+            info:
+                type: string
+        steps:
+            - run:
+                command: |
+                    export ENV_USER_ID=$(id -u)
+                    export ENV_GROUP_ID=$(id -g)
+                    export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+                    export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+                    docker-compose -f << parameters.dockerComposeFile >> exec << parameters.container >> /bin/bash -c '<< parameters.command >>'
+                name: << parameters.info >>
+    restore-caches-and-code:
+        description: |
+            This command restore caches and code.
+        parameters:
+            dependencyCheckSumFile:
+                type: string
+            dockerCheckSumDir:
+                default: ./docker
+                type: string
+        steps:
+            - checkout
+            - docker-images-cache-load:
+                dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+            - docker-layers-load
+            - dependency-cache-load:
+                checkSumFile: << parameters.dependencyCheckSumFile >>
+    run-docker-from-restored-caches:
+        description: |
+            This command run docker from restored cache.
+        parameters:
+            dependencyCheckSumFile:
+                type: string
+            dockerCheckSumDir:
+                default: ./docker
+                type: string
+            dockerComposeFile:
+                default: ./docker/docker-compose.ci.yml
+                type: string
+            dockerLanguage:
+                default: en_US.UTF-8
+                type: string
+            dockerTimezone:
+                default: UTC
+                type: string
+        steps:
+            - restore-caches-and-code:
+                dependencyCheckSumFile: << parameters.dependencyCheckSumFile >>
+                dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+            - docker-run:
+                dockerComposeFile: << parameters.dockerComposeFile >>
+                dockerLanguage: << parameters.dockerLanguage >>
+                dockerTimezone: << parameters.dockerTimezone >>
+jobs:
+    build-docker-image:
+        description: |
+            This job is for building single docker image
+        machine: true
+        parameters:
+            additionalCacheKey:
+                default: v1
+                type: string
+            dockerBuildArgs:
+                default: ""
+                type: string
+            dockerFolder:
+                default: ./docker/composer
+                type: string
+            dockerLanguage:
+                default: en_US.UTF-8
+                type: string
+            dockerTimezone:
+                default: UTC
+                type: string
+            imageTag:
+                default: ci-composer
+                type: string
+        steps:
+            - checkout
+            - docker-images-cache-load:
+                additionalCacheKey: << parameters.additionalCacheKey >>
+                baseCacheName: << parameters.imageTag >>
+                dockerCheckSumDir: << parameters.dockerFolder >>
+            - docker-layers-load:
+                cacheFile: ~/<< parameters.imageTag >>.tar
+            - docker-layers-check:
+                cacheFile: ~/<< parameters.imageTag >>.tar
+            - docker-image-build:
+                dockerBuildArgs: << parameters.dockerBuildArgs >>
+                dockerFolder: << parameters.dockerFolder >>
+                dockerLanguage: << parameters.dockerLanguage >>
+                dockerTimezone: << parameters.dockerTimezone >>
+                imageTag: << parameters.imageTag >>
+            - docker-layers-save:
+                cacheFile: ~/<< parameters.imageTag >>.tar
+                nameFilter: << parameters.imageTag >>
+            - docker-images-cache-save:
+                additionalCacheKey: << parameters.additionalCacheKey >>
+                baseCacheName: << parameters.imageTag >>
+                cacheFile: ~/<< parameters.imageTag >>.tar
+                dockerCheckSumDir: << parameters.dockerFolder >>
+    build-docker-images:
+        description: |
+            This job is for building docker images
+        machine: true
+        parameters:
+            additionalCacheKey:
+                default: v1
+                type: string
+            dockerCheckSumDir:
+                default: ./docker
+                type: string
+            dockerComposeFile:
+                default: ./docker/docker-compose.ci.yml
+                type: string
+            dockerLanguage:
+                default: en_US.UTF-8
+                type: string
+            dockerTimezone:
+                default: UTC
+                type: string
+        steps:
+            - checkout
+            - docker-images-cache-load:
+                additionalCacheKey: << parameters.additionalCacheKey >>
+                dockerCheckSumDir: << parameters.dockerCheckSumDir >>
+            - docker-layers-load
+            - docker-layers-check
+            - docker-images-build:
+                dockerComposeFile: << parameters.dockerComposeFile >>
+                dockerLanguage: << parameters.dockerLanguage >>
+                dockerTimezone: << parameters.dockerTimezone >>
+            - docker-layers-save
+            - docker-images-cache-save:
+                additionalCacheKey: << parameters.additionalCacheKey >>
+                dockerCheckSumDir: << parameters.dockerCheckSumDir >>
 
-  # Execute command in container command
-
-  execute-in-container:
-    parameters:
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      info:
-        type: string
-      container:
-        type: string
-      command:
-        type: string
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-    steps:
-      - run:
-          name: << parameters.info >>
-          command: |
-            export ENV_USER_ID=$(id -u)
-            export ENV_GROUP_ID=$(id -g)
-            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
-            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
-            docker-compose -f << parameters.dockerComposeFile >> exec << parameters.container >> /bin/bash -c '<< parameters.command >>'
-
-  # Execute command with external docker container
-
-  execute-with-external-container:
-    parameters:
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      info:
-        type: string
-      container:
-        type: string
-      command:
-        type: string
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-    steps:
-      - run:
-          name: << parameters.info >>
-          command: |
-            export ENV_USER_ID=$(id -u)
-            export ENV_GROUP_ID=$(id -g)
-            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
-            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
-            docker-compose -f << parameters.dockerComposeFile >> run --rm << parameters.container >> << parameters.command >>
-
-  # Run docker containers command
-
-  docker-run:
-    parameters:
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-    steps:
-      - docker-hub-login-check-env-vars
-      - run:
-          name: Run docker
-          command: |
-            export ENV_USER_ID=$(id -u)
-            export ENV_GROUP_ID=$(id -g)
-            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
-            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
-            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
-            docker-compose -f << parameters.dockerComposeFile >> up -d
-
-  # Build docker images command
-
-  docker-images-build:
-    parameters:
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-    steps:
-      - docker-hub-login-check-env-vars
-      - run:
-          name: Build docker
-          command: |
-            export ENV_USER_ID=$(id -u)
-            export ENV_GROUP_ID=$(id -g)
-            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
-            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
-            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
-            docker-compose -f << parameters.dockerComposeFile >> build
-
-  # Build single docker image command
-
-  docker-image-build:
-    parameters:
-      imageTag:
-        type: string
-        default: "ci-composer"
-      dockerFolder:
-        type: string
-        default: "./docker/composer"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-      dockerBuildArgs:
-        type: string
-        default: ""
-    steps:
-      - docker-hub-login-check-env-vars
-      - run:
-          name: Build docker
-          command: |
-            export ENV_USER_ID=$(id -u)
-            export ENV_GROUP_ID=$(id -g)
-            export ENV_LANGUAGE=<< parameters.dockerLanguage >>
-            export ENV_TIMEZONE=<< parameters.dockerTimezone >>
-            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
-            docker build -t << parameters.imageTag >> << parameters.dockerBuildArgs >> << parameters.dockerFolder >>
-
-  # Load cached docker images command
-
-  docker-images-cache-load:
-    parameters:
-      baseCacheName:
-        type: string
-        default: "images"
-      dockerCheckSumDir:
-        type: string
-        default: "./docker"
-      additionalCacheKey:
-        type: string
-        default: "v1"
-    steps:
-      - run:
-          name: Create directory cache key
-          command: |
-            echo $(find << parameters.dockerCheckSumDir >> -type f -exec md5sum {} \; | md5sum | cut -d' ' -f1)  > CACHE_KEY
-      - restore_cache:
-          name: Load docker images from cache
-          keys:
-            - docker-<< parameters.baseCacheName >>-{{ checksum "./CACHE_KEY" }}-<< parameters.additionalCacheKey >>
-
-  # Save docker images to cache command
-
-  docker-images-cache-save:
-    parameters:
-      baseCacheName:
-        type: string
-        default: "images"
-      dockerCheckSumDir:
-        type: string
-        default: "./docker"
-      additionalCacheKey:
-        type: string
-        default: "v1"
-      cacheFile:
-        type: string
-        default: "~/st-cached-docker-layers.tar"
-    steps:
-      - run:
-          name: Create directory cache key
-          command: |
-            echo $(find << parameters.dockerCheckSumDir >> -type f -exec md5sum {} \; | md5sum | cut -d' ' -f1)  > CACHE_KEY
-      - save_cache:
-          name: Cache docker images
-          key: docker-<< parameters.baseCacheName >>-{{ checksum "./CACHE_KEY" }}-<< parameters.additionalCacheKey >>
-          paths:
-            - << parameters.cacheFile >>
-
-  # Check cached docker layers command
-
-  docker-layers-check:
-    parameters:
-      cacheFile:
-        type: string
-        default: "~/st-cached-docker-layers.tar"
-    steps:
-      - run:
-          name: Check docker layers, and halt job if they exist
-          command: |
-            if [[ -f << parameters.cacheFile >> ]]; then
-                circleci step halt
-            fi
-
-  # Load cached docker layers command
-
-  docker-layers-load:
-    parameters:
-      cacheFile:
-        type: string
-        default: "~/st-cached-docker-layers.tar"
-    steps:
-      - run:
-          name: Load docker layers
-          command: |
-            if [[ -f << parameters.cacheFile >> ]]; then
-              docker load -i << parameters.cacheFile >>
-            fi
-
-  # Cache docker layers command
-
-  docker-layers-save:
-    parameters:
-      cacheFile:
-        type: string
-        default: "~/st-cached-docker-layers.tar"
-      nameFilter:
-        type: string
-        default: ""
-    steps:
-      - run:
-          name: Save docker layers
-          command: |
-            DOCKER_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}"  --filter "dangling=false" << parameters.nameFilter >>)
-            docker save -o << parameters.cacheFile >> $DOCKER_IMAGES
-
-  # Check for install dependencies command
-
-  dependency-check:
-    parameters:
-      cacheDataPath:
-        type: string
-        default: ./vendor/
-    steps:
-      - run:
-          name: Check if dependencies are in provided directory, and halt if they are
-          command: |
-            if [[ -d << parameters.cacheDataPath >> ]]; then
-              circleci step halt
-            fi
-
-  # Save dependencies to cache command
-
-  dependency-cache-save:
-    parameters:
-      checkSumFile:
-        type: string
-      cacheDataPath:
-        type: string
-        default: ./vendor/
-      additionalCacheKey:
-        type: string
-        default: "v1"
-    steps:
-      - save_cache:
-          name: Cache vendor
-          key: vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>
-          paths:
-            - << parameters.cacheDataPath >>
-
-  # Load dependencies from cache command
-
-  dependency-cache-load:
-    parameters:
-      checkSumFile:
-        type: string
-      additionalCacheKey:
-        type: string
-        default: "v1"
-    steps:
-      - restore_cache:
-          name: Load vendor from cache
-          keys:
-            - vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>
-
-  # Restores cache and code command
-
-  restore-caches-and-code:
-    parameters:
-      dockerCheckSumDir:
-        type: string
-        default: "./docker"
-      dependencyCheckSumFile:
-        type: string
-    steps:
-      - checkout
-      - docker-images-cache-load:
-          dockerCheckSumDir: << parameters.dockerCheckSumDir >>
-      - docker-layers-load
-      - dependency-cache-load:
-          checkSumFile: << parameters.dependencyCheckSumFile >>
-
-  # Run docker from restored caches command
-
-  run-docker-from-restored-caches:
-    parameters:
-      dockerCheckSumDir:
-        type: string
-        default: "./docker"
-      dependencyCheckSumFile:
-        type: string
-      dockerComposeFile:
-        type: string
-        default: "./docker/docker-compose.ci.yml"
-      dockerTimezone:
-        type: string
-        default: "UTC"
-      dockerLanguage:
-        type: string
-        default: "en_US.UTF-8"
-    steps:
-      - restore-caches-and-code:
-          dockerCheckSumDir: << parameters.dockerCheckSumDir >>
-          dependencyCheckSumFile: << parameters.dependencyCheckSumFile >>
-      - docker-run:
-          dockerComposeFile: << parameters.dockerComposeFile >>
-          dockerTimezone: << parameters.dockerTimezone >>
-          dockerLanguage: << parameters.dockerLanguage >>
-
-  # Check docker hub env wars
-
-  docker-hub-login-check-env-vars:
-    steps:
-      - run:
-          name: Check environment variables required for Docker Hub login
-          command: |
-            set -e
-            if [[ -z "${DOCKERHUB_USERNAME}" ]]; then
-              echo "DOCKERHUB_USERNAME environment variable is not set"
-              exit 1
-            elif [[ -z "${DOCKERHUB_PASSWORD}" ]]; then
-              echo "DOCKERHUB_PASSWORD environment variable is not set"
-              exit 1
-            fi

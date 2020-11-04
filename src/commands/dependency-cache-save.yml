@@ -1,0 +1,17 @@
+description: >
+  This command save dependencies to cache.
+parameters:
+  checkSumFile:
+    type: string
+  cacheDataPath:
+    type: string
+    default: ./vendor/
+  additionalCacheKey:
+    type: string
+    default: "v1"
+steps:
+  - save_cache:
+      name: Cache vendor
+      key: vendor-{{ checksum "<< parameters.checkSumFile >>" }}-<< parameters.additionalCacheKey >>
+      paths:
+        - << parameters.cacheDataPath >>

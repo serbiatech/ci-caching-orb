@@ -1,0 +1,47 @@
+description: >
+  This job is for building single docker image
+
+parameters:
+  dockerFolder:
+    type: string
+    default: "./docker/composer"
+  imageTag:
+    type: string
+    default: "ci-composer"
+  additionalCacheKey:
+    type: string
+    default: "v1"
+  dockerTimezone:
+    type: string
+    default: "UTC"
+  dockerLanguage:
+    type: string
+    default: "en_US.UTF-8"
+  dockerBuildArgs:
+    type: string
+    default: ""
+machine: true
+steps:
+  - checkout
+  - docker-images-cache-load:
+      dockerCheckSumDir: << parameters.dockerFolder >>
+      additionalCacheKey: << parameters.additionalCacheKey >>
+      baseCacheName: << parameters.imageTag >>
+  - docker-layers-load:
+      cacheFile: ~/<< parameters.imageTag >>.tar
+  - docker-layers-check:
+      cacheFile: ~/<< parameters.imageTag >>.tar
+  - docker-image-build:
+      dockerFolder: << parameters.dockerFolder >>
+      dockerBuildArgs: << parameters.dockerBuildArgs >>
+      imageTag: << parameters.imageTag >>
+      dockerTimezone: << parameters.dockerTimezone >>
+      dockerLanguage: << parameters.dockerLanguage >>
+  - docker-layers-save:
+      cacheFile: ~/<< parameters.imageTag >>.tar
+      nameFilter: << parameters.imageTag >>
+  - docker-images-cache-save:
+      cacheFile: ~/<< parameters.imageTag >>.tar
+      dockerCheckSumDir: << parameters.dockerFolder >>
+      additionalCacheKey: << parameters.additionalCacheKey >>
+      baseCacheName: << parameters.imageTag >>

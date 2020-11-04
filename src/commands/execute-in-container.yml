@@ -1,0 +1,27 @@
+description: >
+  This command executes command in docker container.
+parameters:
+  dockerComposeFile:
+    type: string
+    default: "./docker/docker-compose.ci.yml"
+  info:
+    type: string
+  container:
+    type: string
+  command:
+    type: string
+  dockerTimezone:
+    type: string
+    default: "UTC"
+  dockerLanguage:
+    type: string
+    default: "en_US.UTF-8"
+steps:
+  - run:
+      name: << parameters.info >>
+      command: |
+        export ENV_USER_ID=$(id -u)
+        export ENV_GROUP_ID=$(id -g)
+        export ENV_LANGUAGE=<< parameters.dockerLanguage >>
+        export ENV_TIMEZONE=<< parameters.dockerTimezone >>
+        docker-compose -f << parameters.dockerComposeFile >> exec << parameters.container >> /bin/bash -c '<< parameters.command >>'

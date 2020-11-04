@@ -1,0 +1,13 @@
+description: >
+  This command check for presence of docker layers.
+parameters:
+  cacheFile:
+    type: string
+    default: "~/st-cached-docker-layers.tar"
+steps:
+  - run:
+      name: Check docker layers, and halt job if they exist
+      command: |
+        if [[ -f << parameters.cacheFile >> ]]; then
+            circleci step halt
+        fi
